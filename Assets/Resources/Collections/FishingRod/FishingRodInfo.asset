@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 40998fdc8d160e047be71da3ee34fdc1, type: 3}
+  m_Name: FishingRodInfo
+  m_EditorClassIdentifier: 
+  _prefab: {fileID: 5762760349576522592, guid: cbe10742653446046a45e771a537a103, type: 3}
+  _type: Kayu
+  _image: {fileID: 21300000, guid: 8c8f173f059634a439b53959c3df2fd6, type: 3}
+  _name: Pancingan
+  _desc: Level 1
+  _length: 2
+  _maxWeight: 2
