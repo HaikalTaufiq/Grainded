@@ -30,6 +30,8 @@ public class Fish : MonoBehaviour
     [SerializeField] private float waterSurfaceY = 0.0f;
     public AudioSource hitting;
 
+    private float timeStickingToBait = 0f; // Timer untuk mendeteksi berapa lama ikan menempel pada umpan
+
     void Start()
     {
         startingPosition = transform.position;
@@ -44,18 +46,17 @@ public class Fish : MonoBehaviour
         if (playerController.currentGameState == PlayerController.GameState.isWater && bait != null)
         {
             isChasingBait = true;
-
         }
         else
         {
             isChasingBait = false;
-
         }
 
         if (isStickingToBait)
         {
             StickToBait();
             playerController.gameState = PlayerController.GameState.isWater;
+            HandleTimeoutAfterStickingToBait();
         }
         else if (isChasingBait)
         {
@@ -74,6 +75,40 @@ public class Fish : MonoBehaviour
         }
 
         AdjustMouthAndTail();
+    }
+    private void HandleTimeoutAfterStickingToBait()
+    {
+        // Pastikan timer dimulai hanya jika ikan menempel pada umpan
+        if (isStickingToBait)
+        {
+            // Cek apakah ikan sudah cukup dekat dengan umpan untuk memulai penghitungan waktu
+            float baitDistance = Vector3.Distance(transform.position, bait.position);
+
+            // Jika ikan cukup dekat dengan umpan, mulai hitung waktu
+            if (baitDistance < baitProximityThreshold && timeStickingToBait == 0f)
+            {
+                timeStickingToBait = Time.time; // Mulai waktu hitung dari saat ikan menempel pada umpan
+            }
+
+            // Jika timer sudah mulai berjalan, hitung waktu yang telah berlalu
+            if (timeStickingToBait > 0f)
+            {
+                float elapsedTime = Time.time - timeStickingToBait; // Hitung berapa lama ikan menempel
+
+                // Setelah 5 detik, ikan akan lepas jika belum masuk zona tangkap
+                if (elapsedTime >= 5f && !isInCatchZone)
+                {
+                    Debug.Log("Ikan lepas setelah 5 detik tanpa ditarik ke zona tangkap!");
+                    isStickingToBait = false; // Ikan lepas
+                    timeStickingToBait = 0f; // Reset timer
+                }
+            }
+        }
+        else
+        {
+            // Reset timer jika ikan tidak menempel pada umpan
+            timeStickingToBait = 0f;
+        }
     }
 
     private void CheckFishZone()
@@ -151,11 +186,9 @@ public class Fish : MonoBehaviour
         }
     }
 
-    public float someThreshold = 5f;
     private void StickToBait()
     {
-
-
+        // Periksa apakah ikan berada di dalam air atau tidak
         if (transform.position.y > waterSurfaceY)
         {
             isInWater = false; // Ikan berada di luar air
@@ -165,71 +198,35 @@ public class Fish : MonoBehaviour
             isInWater = true; // Ikan berada di dalam air
         }
 
-        if (!isInWater) // Jika tidak berada di dalam air, hentikan perlawanan
+        // Jika ikan tidak berada di dalam air, langsung tarik ikan ke posisi umpan
+        if (!isInWater)
         {
-            transform.position = bait.position;
+            transform.position = bait.position; // Tarik ikan ke umpan jika di luar air
             return;
         }
 
-        // Tentukan posisi ikan mengikuti umpan
-        transform.position = bait.position;
+        // Tentukan posisi mulut ikan mengikuti umpan dengan pergerakan halus
+        float baitDistance = Vector3.Distance(transform.position, bait.position);
 
-        // Rotasi tubuh ikan menghadap ke arah umpan
-        body.rotation = Quaternion.LookRotation(bait.forward, Vector3.up);
-
-        // Dapatkan posisi pemain
-        Vector3 playerPosition = player.transform.position; // Pastikan player sudah dideklarasikan dan dirujuk dengan benar
-        Vector3 directionToPlayer = transform.position - playerPosition; // Arah dari ikan ke pemain
-
-        // Hitung jarak antara ikan dan pemain
-        float distanceToPlayer = directionToPlayer.magnitude;
-
-        // Jika ikan terlalu dekat dengan pemain, berikan perlawanan
-        if (distanceToPlayer < someThreshold) // ganti someThreshold dengan nilai jarak yang diinginkan
+        if (baitDistance > 3f) // Jika ikan terlalu jauh dari umpan
         {
-            // Normalisasi arah untuk bergerak menjauh dari pemain
-            directionToPlayer.Normalize();
-
-            // Hitung target direction berdasarkan arah menjauh dari pemain
-            targetDirection = directionToPlayer;
-
-            // Rotasi tubuh ikan menghadap ke arah menjauh dari pemain
-            body.rotation = Quaternion.LookRotation(targetDirection, Vector3.up);
+            transform.position = Vector3.MoveTowards(transform.position, bait.position, speed * Time.deltaTime);
         }
         else
         {
-            targetDirection = bait.forward; // Kembali ke arah umpan
+            transform.position = bait.position; // Ikan tetap menempel di umpan
         }
 
-        float distanceTraveled = Vector3.Distance(startingPosition, transform.position);
+        // Pastikan tubuh ikan tetap menghadap ke umpan
+        body.rotation = Quaternion.LookRotation(bait.position - transform.position, Vector3.up);
 
-        // Tentukan batas pergerakan sebelum ikan mencoba untuk membalik arah
-        if (distanceTraveled >= movementLimit)
+        // Implementasi pergerakan melawan (menarik tali)
+        if (isReversing)
         {
-            // Balik arah untuk perlawanan
-            targetDirection = direction * -1;
-            startingPosition = transform.position;
-            isReversing = true;
+            transform.Translate(direction * (speed * 2) * Time.deltaTime, Space.World);
+            body.rotation = Quaternion.LookRotation(direction, Vector3.up);
         }
-        else
-        {
-            isReversing = false;
-        }
-
-        // Mengubah arah pergerakan ikan menggunakan Slerp untuk membuat gerakan halus
-        direction = Vector3.Slerp(direction, targetDirection, turnSpeed * Time.deltaTime);
-
-
-
-        // Gerakan perlawanan di sepanjang arah horizontal dan zigzag
-        transform.Translate(direction * speed * 2 * Time.deltaTime, Space.World);
-
-        // Update rotasi tubuh ikan agar tetap sejajar dengan arah gerakan horizontal
-        body.rotation = Quaternion.LookRotation(direction, Vector3.up);
     }
-
-
-
 
     private void ReleaseFish()
     {
@@ -237,11 +234,9 @@ public class Fish : MonoBehaviour
         {
             if (Input.GetKeyDown(KeyCode.F))
             {
-
                 if (isInCatchZone)
                 {
                     playerController.Victory();
-
                     isStickingToBait = false;
 
                     if (inventoryController != null && fishInfo != null)
@@ -251,7 +246,6 @@ public class Fish : MonoBehaviour
                         Debug.Log("Ikan berhasil ditambahkan ke inventory!");
                         Destroy(gameObject);
                         inventoryController.RemoveBaitItems();
-
                     }
                     else
                     {
@@ -271,10 +265,6 @@ public class Fish : MonoBehaviour
             }
         }
     }
-
-
-
-
 
     private void AdjustMouthAndTail()
     {
