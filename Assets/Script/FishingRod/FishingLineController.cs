@@ -32,6 +32,7 @@ public class FishingLineController : MonoBehaviour
     private bool isCastFishingRod = false;
     private Buoyancy buoyancyController = null;
     private bool isReadyFishingRod = true;
+    private List<Fish> fishes;
 
     void Start()
     {
@@ -66,6 +67,8 @@ public class FishingLineController : MonoBehaviour
         UpdateSpring();
 
         rbwhatIsHangingFromTheRope.mass = loadMass;
+        fishes = new List<Fish>(FindObjectsOfType<Fish>());
+
     }
 
     void Update()
@@ -95,6 +98,45 @@ public class FishingLineController : MonoBehaviour
         InitRope();
 
         DisplayRope();
+
+        foreach (Fish fish in fishes)
+        {
+            if (fish.isStickingToBait)
+            {
+                // Modifikasi spring joint dan line renderer untuk menciptakan efek tali yang lebih realistis
+                // Menarik tali menjadi lurus jika ikan menempel pada umpan
+
+                Vector3 directionToFish = (whatIsHangingFromTheRope.position - fish.transform.position).normalized;
+                float distanceToFish = Vector3.Distance(whatIsHangingFromTheRope.position, fish.transform.position);
+
+                // Mengatur spring joint agar menarik tali menjadi lebih lurus
+                springJoint.spring = Mathf.Lerp(500f, 1500f, distanceToFish / ropeLength); // Menyesuaikan kekuatan pegas berdasarkan jarak
+                springJoint.damper = Mathf.Lerp(0.1f, 0.05f, distanceToFish / ropeLength); // Menyesuaikan peredaman
+
+                // Menyesuaikan line renderer agar tampilannya lebih realistis
+                lineRenderer.positionCount = ropeSegments.Count;
+                for (int i = 0; i < ropeSegments.Count; i++)
+                {
+                    // Ambil elemen rope segment ke dalam variabel lokal
+                    RopeSegment currentSegment = ropeSegments[i];
+
+                    Vector3 ropePosition = currentSegment.posNow;
+
+                    // Jika rope segment mendekati ikan, tarik ke arah ikan untuk membuat tali lebih lurus
+                    if (distanceToFish < ropeSegmentLength * i)
+                    {
+                        ropePosition = Vector3.Lerp(ropePosition, fish.transform.position, 0.2f); // Luruskan tali menuju ikan
+                    }
+
+                    // Modifikasi posisi rope segment menggunakan variabel lokal
+                    currentSegment.posNow = ropePosition;
+
+                    // Simpan kembali variabel lokal ke dalam list
+                    ropeSegments[i] = currentSegment;
+                }
+                DisplayRope();
+            }
+        }
     }
 
     private void FixedUpdate()
