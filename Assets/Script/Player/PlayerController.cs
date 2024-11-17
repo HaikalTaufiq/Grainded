@@ -6,6 +6,7 @@ using UnityEngine;
 
 public class PlayerController : MonoBehaviour
 {
+    [SerializeField] private float playerMoney = 1000f;
     [SerializeField] float moveSpeed = 5f;
     [SerializeField] float runSpeed = 7f;
     [SerializeField] float rotationSpeed = 500f;
@@ -24,7 +25,7 @@ public class PlayerController : MonoBehaviour
     private InventoryController inventoryController;
     private float factorCastPower = 100f;
     public bool isGrounded;
-    public float moveAmount { get; private set; } // Menjadikan moveAmount sebagai properti yang bisa dibaca dari luar
+    public float moveAmount { get; private set; }
 
     float ySpeed;
     private bool isPicking = false;
@@ -36,7 +37,7 @@ public class PlayerController : MonoBehaviour
     CharacterController characterController;
     BaitInfo baitInfo;
 
-    public enum GameState { noCollect, isReady, isInventory, isCast, isWater }
+    public enum GameState { noCollect, isReady, isInventory, isShop, isCast, isWater }
     public GameState currentGameState;
 
     [Header("Game State")]
@@ -59,10 +60,10 @@ public class PlayerController : MonoBehaviour
     public AudioSource splashAudioSource;
 
     private float fishingAmountTarget = 0f;
-    private float fishingAmountSmoothTime = 0.1f; // Waktu transisi yang halus
-    private float fishingAmountVelocity = 0f; // Variabel untuk SmoothDamp
-    private float castDelay = 1.9f; // Waktu delay sebelum fishing rod ditransform
-    private float soundDelay = 1.3f; // Waktu delay sebelum fishing rod ditransform
+    private float fishingAmountSmoothTime = 0.1f;
+    private float fishingAmountVelocity = 0f;
+    private float castDelay = 1.9f;
+    private float soundDelay = 1.3f;
     private IEnumerator castCoroutine;
     private IEnumerator audioCoroutine;
 
@@ -80,11 +81,18 @@ public class PlayerController : MonoBehaviour
     private void Start()
     {
         inventoryController = GetComponent<InventoryController>();
+        fishes = new List<Fish>(FindObjectsOfType<Fish>());
+
     }
 
     private void Update()
     {
         ManageVisibility();
+
+        if (Input.GetKeyDown(KeyCode.Tab))
+        {
+            gameState = GameState.isInventory;
+        }
 
         switch (gameState)
         {
@@ -93,12 +101,12 @@ public class PlayerController : MonoBehaviour
                 HandleRotation();
                 ShowInventory();
                 CheckBait();
+                ShowShop();
                 Picking();
                 if (windingAudioSource.isPlaying)
                 {
                     windingAudioSource.Stop();
                 }
-
 
                 break;
 
@@ -106,6 +114,8 @@ public class PlayerController : MonoBehaviour
                 ShowInventory();
                 HandleMovement();
                 HandleRotation();
+                ShowShop();
+
                 Picking();
                 CheckBait();
                 SetFloaterDepth();
@@ -129,8 +139,14 @@ public class PlayerController : MonoBehaviour
                 break;
 
             case GameState.isInventory:
-
+                ShowInventory();
                 break;
+
+            case GameState.isShop:
+                ShowInventory();
+                ShowShop();
+                break;
+
 
             case GameState.isCast:
                 HandleRotation();
@@ -152,6 +168,15 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    public float GetPlayerMoney()
+    {
+        return playerMoney;
+    }
+    public void SetPlayerMoney(float money)
+    {
+        playerMoney += money;
+    }
+
     public void Victory()
     {
         animator.SetBool("isVictory", true);
@@ -166,10 +191,10 @@ public class PlayerController : MonoBehaviour
 
     private void CheckBait()
     {
-        // Mendapatkan item dari InventoryController
+
         List<Item> items = inventoryController.GetItem();
 
-        // Memeriksa apakah ada bait di inventori
+
         bool hasBait = false;
 
         foreach (var item in items)
@@ -181,24 +206,22 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        // Jika tidak ada bait, ubah game state ke 'noCollect'
+
         if (!hasBait)
         {
             gameState = GameState.noCollect;
-            Debug.Log("No bait available, game state set to noCollect");
         }
         else
         {
-            // Jika ada bait, ubah game state ke 'isReady'
+
             gameState = GameState.isReady;
-            Debug.Log("Bait found, game state set to isReady");
         }
 
     }
 
     private void Picking()
     {
-        if (!isPicking) // Cegah pergerakan jika sedang melakukan animasi picking
+        if (!isPicking)
         {
             HandleMovement();
             HandleRotation();
@@ -243,7 +266,7 @@ public class PlayerController : MonoBehaviour
     }
 
 
-    private void FishingRodHooking()
+    public void FishingRodHooking()
     {
 
         if (Input.GetKeyDown(KeyCode.H))
@@ -285,7 +308,7 @@ public class PlayerController : MonoBehaviour
         else if (Input.GetKeyUp(KeyCode.U))
         {
             fishingRodController.UpdateWinch();
-            fishingAmountTarget = 0.5f; // Mengatur target animasi
+            fishingAmountTarget = 0.5f;
 
             if (windingAudioSource.isPlaying)
             {
@@ -297,20 +320,24 @@ public class PlayerController : MonoBehaviour
         float smoothFishingAmount = Mathf.SmoothDamp(currentFishingAmount, fishingAmountTarget, ref fishingAmountVelocity, fishingAmountSmoothTime);
 
         animator.SetFloat("fishingAmount", smoothFishingAmount);
-
-        if (fishingRodController.GetIsReady())
+        foreach (Fish fish in fishes)
         {
-            if (gameState != GameState.isReady)
+            if (!fish.isStickingToBait && fishingRodController.GetIsReady())
             {
-                gameState = GameState.isReady;
-                SetIsReadyAll(true);
-            }
-            else
-            {
-                gameState = GameState.isReady; // Set gameState ke noCollect jika tidak siap
+                if (gameState != GameState.isReady)
+                {
+                    gameState = GameState.isReady;
+                    SetIsReadyAll(true);
+                }
+                else
+                {
+                    gameState = GameState.isReady;
+                }
             }
         }
     }
+    private List<Fish> fishes;
+
 
     public void ReelingIn()
     {
@@ -337,19 +364,19 @@ public class PlayerController : MonoBehaviour
 
     private void CastFishingRod()
     {
-        if (Input.GetMouseButton(0))  // 0 berarti tombol kiri mouse
+        if (Input.GetMouseButton(0))
         {
             currentCastPower += factorCastPower * Time.deltaTime;
             if (currentCastPower > 100f)
                 currentCastPower = 100f;
 
             castUIController.SetCastPowerSlider(currentCastPower);
-            castUIController.SetCastSliderActive(true); // Menampilkan slider
+            castUIController.SetCastSliderActive(true);
             gameState = GameState.isCast;
 
         }
 
-        else if (Input.GetMouseButtonUp(0))  // 0 berarti tombol kiri mouse
+        else if (Input.GetMouseButtonUp(0))
         {
             castUIController.SetCastSliderActive(false);
             cameraController.Casting();
@@ -385,8 +412,8 @@ public class PlayerController : MonoBehaviour
         {
             castingAudioSource.Play();
         }
-        splashAudioSource.Stop(); // Hentikan audio yang sedang diputar
-        splashAudioSource.time = 0; // Mulai dari awal audio
+        splashAudioSource.Stop();
+        splashAudioSource.time = 0;
         splashAudioSource.Play();
 
     }
@@ -440,9 +467,8 @@ public class PlayerController : MonoBehaviour
         float h = Input.GetAxis("Horizontal");
         float v = Input.GetAxis("Vertical");
 
-        // Hitung moveAmount
         float moveAmount = Mathf.Abs(h) + Mathf.Abs(v);
-        moveAmount = Mathf.Clamp(moveAmount, 0f, 1f); // Batasi agar tidak lebih dari 1
+        moveAmount = Mathf.Clamp(moveAmount, 0f, 1f);
 
         var moveInput = new Vector3(h, 0, v).normalized;
         var moveDir = cameraController.PlanarRotation * moveInput;
@@ -466,18 +492,16 @@ public class PlayerController : MonoBehaviour
         if (moveAmount > 0)
         {
             animator.SetFloat("moveAmount", IsRunning() ? 1f : 0.2f, 0.1f, Time.deltaTime);
-            // Memainkan suara footstep
             if (isGrounded && stepTimer <= 0f)
             {
                 footstepAudioSource.Play();
-                stepTimer = IsRunning() ? timeBetweenStepsRunning : timeBetweenStepsWalking; // Atur jeda langkah
+                stepTimer = IsRunning() ? timeBetweenStepsRunning : timeBetweenStepsWalking;
             }
         }
         else
         {
-            animator.SetFloat("moveAmount", 0f, 0.1f, Time.deltaTime); // Idle
+            animator.SetFloat("moveAmount", 0f, 0.1f, Time.deltaTime);
         }
-        // Mengurangi timer langkah
         if (stepTimer > 0f)
         {
             stepTimer -= Time.deltaTime;
@@ -518,7 +542,6 @@ public class PlayerController : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Tab))
         {
-            Debug.Log("Tab pressed");
             if (inventoryUIController.ShowInventoryPanel(inventoryController))
             {
                 gameState = GameState.isInventory;
@@ -535,21 +558,28 @@ public class PlayerController : MonoBehaviour
     }
 
 
+    public Oldman oldman;
+
     private void ShowShop()
     {
-        if (Input.GetKeyDown(KeyCode.Q))
+
+        if (oldman.isPlayerInRange && Input.GetKeyDown(KeyCode.Q))
         {
-            if (shopController.ShowShopPanel())
+            bool shopPanelShown = shopController.ShowShopPanel(this, inventoryController);
+
+            if (shopPanelShown)
             {
+                gameState = GameState.isShop;
                 Cursor.visible = true;
+                cameraController.CheckCursor();
             }
             else
             {
                 gameState = GameState.isReady;
                 Cursor.visible = false;
-
             }
         }
     }
+
 
 }
